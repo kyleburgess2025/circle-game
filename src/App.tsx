@@ -1,20 +1,97 @@
-import React, { useEffect, useState } from "react";
-import logo from "./logo.svg";
+import React, { useCallback, useEffect, useState } from "react";
 import "./App.css";
-import Cursor from "./components/Cursor";
-import Circle, { CircleProps } from "./components/Circle";
+import Canvas from "./components/Canvas";
 import {
   getWindowDimensions,
   getXYVelocityRadiusForCircle,
 } from "./helpers/mainAppHelpers";
+import { CircleType } from "./helpers/mainAppHelpers";
+
+const SPEED = 0.001;
 
 function App() {
   const [gameState, setGameState] = useState("start");
   const [windowDimensions, setWindowDimensions] = useState(
     getWindowDimensions()
   );
-  const [circles, setCircles] = useState<CircleProps[]>([]);
   const [radius, setRadius] = useState<number>(10);
+  const [cursorX, setX] = useState<number>(0);
+  const [cursorY, setY] = useState<number>(0);
+  const [circles, setCircles] = useState<CircleType[]>([]);
+
+  const drawFn = useCallback(
+    (context: CanvasRenderingContext2D, frameCount: number) => {
+      context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      context.fillStyle = "#000000";
+      context.beginPath();
+      context.arc(cursorX, cursorY, radius, 0, 2 * Math.PI);
+      context.fill();
+      const newCircles: CircleType[] = [];
+      circles.forEach((circle) => {
+        const newCircle = {
+          ...circle,
+          x: circle.x + circle.xVelocity * SPEED,
+          y: circle.y + circle.yVelocity * SPEED,
+        };
+        context.beginPath();
+        context.arc(
+          newCircle.x,
+          newCircle.y,
+          newCircle.radius,
+          0,
+          2 * Math.PI,
+          false
+        );
+        context.fillStyle = newCircle.color;
+        context.fill();
+        if (
+          Math.sqrt(
+            Math.pow(newCircle.x - cursorX, 2) +
+              Math.pow(newCircle.y - cursorY, 2)
+          ) <
+          newCircle.radius + radius
+        ) {
+          if (newCircle.radius > radius) {
+            setGameState("end");
+          } else {
+            setRadius((prev) => prev + 2);
+            return;
+          }
+        }
+        if (
+          !(
+            newCircle.x + newCircle.radius < 0 ||
+            newCircle.x - newCircle.radius > windowDimensions.width ||
+            newCircle.y + newCircle.radius < 0 ||
+            newCircle.y - newCircle.radius > windowDimensions.height
+          )
+        ) {
+          newCircles.push(newCircle);
+        }
+      });
+      setCircles(newCircles);
+    },
+    [
+      circles,
+      cursorX,
+      cursorY,
+      radius,
+      windowDimensions.height,
+      windowDimensions.width,
+    ]
+  );
+
+  const logMousePosition = (e: MouseEvent) => {
+    setX(e.clientX);
+    setY(e.clientY);
+  };
+
+  useEffect(() => {
+    return () => {
+      document.addEventListener("mousemove", logMousePosition);
+    };
+  }, []);
+
   useEffect(() => {
     function handleResize() {
       setWindowDimensions(getWindowDimensions());
@@ -25,46 +102,17 @@ function App() {
   }, []);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-
-    if (gameState === "playing") {
-      interval = setInterval(() => {
-        setCircles((prev) => {
-          const newCircles = [...prev];
-          const currentInformation = getXYVelocityRadiusForCircle(
-            windowDimensions.width,
-            windowDimensions.height,
-            radius
-          );
-          newCircles.push(currentInformation);
-          return newCircles;
-        });
-      }, 100);
-    }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
+    if (gameState !== "playing") return;
+    const interval = setInterval(() => {
+      const newCircle = getXYVelocityRadiusForCircle(
+        windowDimensions.width,
+        windowDimensions.height,
+        radius
+      );
+      setCircles((prev) => [...prev, newCircle]);
+    }, Math.sqrt(radius) / (SPEED * 100));
+    return () => clearInterval(interval);
   }, [gameState, radius, windowDimensions.height, windowDimensions.width]);
-
-  // useEffect(() => {
-  //   const newCircles = [];
-  //   for (const circle of circles) {
-  //     if (
-  //       !(
-  //         circle.x + circle.radius > windowDimensions.width ||
-  //         circle.x - circle.radius < 0 ||
-  //         circle.y + circle.radius > windowDimensions.height ||
-  //         circle.y - circle.radius < 0
-  //       )
-  //     ) {
-  //       newCircles.push(circle);
-  //     }
-  //   }
-  //   setCircles(newCircles);
-  // }, [circles, windowDimensions.height, windowDimensions.width]);
 
   return (
     <div className="App">
@@ -75,19 +123,11 @@ function App() {
       )}
       {gameState === "playing" && (
         <>
-          <h1>Game is playing</h1>
-          <Cursor radius={radius} />
-          <button onClick={() => setGameState("end")}>End Game</button>
-          {circles.map((circle, index) => (
-            <Circle
-              key={index}
-              x={circle.x}
-              y={circle.y}
-              radius={circle.radius}
-              xVelocity={circle.xVelocity}
-              yVelocity={circle.yVelocity}
-            />
-          ))}
+          <Canvas
+            draw={drawFn}
+            height={windowDimensions.height}
+            width={windowDimensions.width}
+          />
         </>
       )}
     </div>

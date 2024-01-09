@@ -7,6 +7,7 @@ export type CircleProps = {
   radius: number;
   xVelocity: number;
   yVelocity: number;
+  color: string;
 };
 
 function Circle({ x, y, radius, xVelocity, yVelocity }: CircleProps) {
