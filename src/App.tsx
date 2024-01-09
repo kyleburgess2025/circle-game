@@ -130,6 +130,21 @@ function App() {
           />
         </>
       )}
+      {gameState === "end" && (
+        <>
+          <h1>Game Over</h1>
+          <h2>Score: {radius}</h2>
+          <button
+            onClick={() => {
+              setRadius(10);
+              setGameState("playing");
+              setCircles([]);
+            }}
+          >
+            Restart Game
+          </button>
+        </>
+      )}
     </div>
   );
 }
